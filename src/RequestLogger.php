@@ -126,7 +126,7 @@ class RequestLogger
     protected function responseBody(): array
     {
         if ($this->response instanceof SymfonyResponse) {
-            return json_decode($this->response->getContent(), true);
+            return json_decode($this->response->getContent(), true) ?? [];
         }
 
         $body = json_decode($this->response->getBody(), true);
