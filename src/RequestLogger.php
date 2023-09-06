@@ -21,7 +21,7 @@ class RequestLogger
     {
         $this->channel = config('request_logger.log.channel');
 
-        if (! config("logger.channels.{$this->channel}")) {
+        if (! config("logging.channels.{$this->channel}")) {
             config(['logging.channels.request' => [
                 'driver' => 'daily',
                 'path' => storage_path('logs/request/request.log'),
