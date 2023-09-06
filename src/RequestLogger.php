@@ -6,13 +6,14 @@ use GuzzleHttp\Psr7\Request as Psr7Request;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class RequestLogger
 {
-    protected Request|Psr7Request|null $request = null;
+    protected $request = null;
 
-    protected Response|SymfonyResponse|null $response = null;
+    protected $response = null;
 
     protected ?string $channel = null;
 
@@ -38,15 +39,23 @@ class RequestLogger
         return $this;
     }
 
-    public function request(Request|Psr7Request $request): self
+    public function request($request): self
     {
+        if (! $request instanceof Request && ! $request instanceof Psr7Request) {
+            throw new InvalidArgumentException(get_class($request));
+        }
+
         $this->request = $request;
 
         return $this;
     }
 
-    public function response(SymfonyResponse|Response $response): self
+    public function response($response): self
     {
+        if (! $response instanceof Response && ! $response instanceof SymfonyResponse) {
+            throw new InvalidArgumentException(get_class($response));
+        }
+
         $this->response = $response;
 
         return $this;
