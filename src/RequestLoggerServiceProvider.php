@@ -21,7 +21,7 @@ class RequestLoggerServiceProvider extends ServiceProvider
     {
         if ($this->app->runningInConsole()) {
             $this->publishes([
-                __DIR__.'/../config/request_logger.php',
+                __DIR__.'/../config/request_logger.php' => config_path('request_logger.php'),
             ], 'request-logger-config');
         }
     }
