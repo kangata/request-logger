@@ -75,6 +75,8 @@ class RequestLogger
                 $this->response->getStatusCode(),
             ]);
         }
+
+        return $message;
     }
 
     protected function requestMethod(): string
