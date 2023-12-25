@@ -63,7 +63,7 @@ class RequestLogger
 
     public function create(string $message = null)
     {
-        Log::channel($this->channel)->debug($this->message($message), $this->context());
+        Log::channel($this->channel)->info($this->message($message), $this->context());
     }
 
     protected function message(string $message = null)
