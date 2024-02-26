@@ -179,6 +179,14 @@ class RequestLogger
         $this->masking(config('request_logger.masking.request.body', []), $data, 'body');
         $this->masking(config('request_logger.masking.request.headers', []), $data, 'headers');
 
+        if (empty($data['query'])) {
+            unset($data['query']);
+        }
+
+        if (empty($data['body'])) {
+            unset($data['body']);
+        }
+
         return $data;
     }
 
@@ -205,7 +213,7 @@ class RequestLogger
 
             $key = "{$field}.{$key}";
 
-            data_set($data, $key, '********');
+            data_set($data, $key, ['********']);
         }
     }
 }
