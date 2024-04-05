@@ -213,7 +213,7 @@ class RequestLogger
 
             $key = "{$field}.{$key}";
 
-            data_set($data, $key, ['********']);
+            data_set($data, $key, $field == 'headers' ? ['********'] : '********');
         }
     }
 }
