@@ -5,6 +5,7 @@ namespace QuetzalStudio\RequestLogger;
 use GuzzleHttp\Psr7\Request as Psr7Request;
 use Illuminate\Http\Client\Response;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
@@ -207,13 +208,11 @@ class RequestLogger
     protected function masking(array $keys, array &$data, string $field): void
     {
         foreach ($keys as $key) {
-            if (! isset($data[$field][$key])) {
+            if (! Arr::has($data, "{$field}.$key")) {
                 continue;
             }
 
-            $key = "{$field}.{$key}";
-
-            data_set($data, $key, $field == 'headers' ? ['********'] : '********');
+            Arr::set($data, "{$field}.{$key}", $field == 'headers' ? ['********'] : '********');
         }
     }
 }
