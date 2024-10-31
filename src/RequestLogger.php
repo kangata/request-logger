@@ -72,7 +72,7 @@ class RequestLogger
         if (is_null($message)) {
             return implode(' ', [
                 $this->requestMethod(),
-                $this->requestUrl(),
+                preg_replace('/\?.*$/', '', $this->requestUrl()),
                 $this->response->getStatusCode(),
             ]);
         }
@@ -171,7 +171,7 @@ class RequestLogger
     {
         $data = [
             'method' => $this->requestMethod(),
-            'url' => $this->requestUrl(),
+            'url' => preg_replace('/\?.*$/', '', $this->requestUrl()),
             'query' => $this->requestQuery(),
             'body' => $this->requestBody(),
             'headers' => $this->requestHeaders(),
