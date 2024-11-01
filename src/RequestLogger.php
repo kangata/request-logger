@@ -177,6 +177,7 @@ class RequestLogger
             'headers' => $this->requestHeaders(),
         ];
 
+        $this->masking(config('request_logger.masking.request.query', []), $data, 'query');
         $this->masking(config('request_logger.masking.request.body', []), $data, 'body');
         $this->masking(config('request_logger.masking.request.headers', []), $data, 'headers');
 
@@ -207,12 +208,25 @@ class RequestLogger
 
     protected function masking(array $keys, array &$data, string $field): void
     {
-        foreach ($keys as $key) {
-            if (! Arr::has($data, "{$field}.$key")) {
+        foreach ($keys as $key => $rules) {
+            $key = is_array($rules) ? $key : $rules;
+            $rules = is_array($rules) ? $rules : [];
+
+            if (! Arr::has($data, "{$field}.{$key}")) {
                 continue;
             }
 
-            Arr::set($data, "{$field}.{$key}", $field == 'headers' ? ['********'] : '********');
+            if (! Arr::has($rules, 'only')) {
+                Arr::set($data, "{$field}.{$key}", $field == 'headers' ? ['********'] : '********');
+
+                continue;
+            }
+
+            foreach (data_get($rules, 'only', []) as $url) {
+                if (preg_match('/'.preg_quote($url, '/').'/', $this->requestUrl())) {
+                    Arr::set($data, "{$field}.{$key}", $field == 'headers' ? ['********'] : '********');
+                }
+            }
         }
     }
 }
