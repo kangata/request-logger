@@ -16,12 +16,18 @@ class RequestLogger
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $channel = null): Response
     {
         $response = $next($request);
 
         try {
-            (new Logger)->request($request)->response($response)->create();
+            $logger = new Logger;
+
+            if ($channel) {
+                $logger->channel($channel);
+            }
+
+            $logger->request($request)->response($response)->create();
         } catch (Throwable $e) {
             Log::error($e);
         }
