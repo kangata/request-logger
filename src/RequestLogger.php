@@ -110,6 +110,10 @@ class RequestLogger
         if ($this->request instanceof Psr7Request) {
             $body = json_decode($this->request->getBody(), true);
 
+            if (empty($body)) {
+                parse_str($this->request->getBody(), $body);
+            }
+
             $this->request->getBody()->rewind();
 
             return $body ?? [];
