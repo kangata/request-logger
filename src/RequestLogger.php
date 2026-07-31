@@ -18,9 +18,13 @@ class RequestLogger
 
     protected ?string $channel = null;
 
+    protected bool $withoutContext = false;
+
     public function __construct()
     {
         $this->channel = config('request_logger.log.channel');
+
+        $this->withoutContext = ! config('request_logger.log.context', true);
 
         if (! config("logging.channels.{$this->channel}")) {
             config(['logging.channels.request' => [
@@ -36,6 +40,13 @@ class RequestLogger
     public function channel(string $channel): self
     {
         $this->channel = $channel;
+
+        return $this;
+    }
+
+    public function withoutContext(): self
+    {
+        $this->withoutContext = true;
 
         return $this;
     }
@@ -62,22 +73,26 @@ class RequestLogger
         return $this;
     }
 
-    public function create(string $message = null)
+    public function create(?string $message = null)
     {
         Log::channel($this->channel)->info($this->message($message), $this->context());
     }
 
-    protected function message(string $message = null)
+    protected function message(?string $message = null)
     {
-        if (is_null($message)) {
-            return implode(' ', [
-                $this->requestMethod(),
-                preg_replace('/\?.*$/', '', $this->requestUrl()),
-                $this->response->getStatusCode(),
-            ]);
+        if (! is_null($message)) {
+            return $message;
         }
 
-        return $message;
+        if (! $this->request || ! $this->response) {
+            throw new InvalidArgumentException('Message is required when request or response is not set.');
+        }
+
+        return implode(' ', [
+            $this->requestMethod(),
+            preg_replace('/\?.*$/', '', $this->requestUrl()),
+            $this->response->getStatusCode(),
+        ]);
     }
 
     protected function requestMethod(): string
@@ -165,10 +180,21 @@ class RequestLogger
 
     protected function context(): array
     {
-        return [
-            'request' => $this->requestContext(),
-            'response' => $this->responseContext(),
-        ];
+        if ($this->withoutContext) {
+            return [];
+        }
+
+        $context = [];
+
+        if ($this->request) {
+            $context['request'] = $this->requestContext();
+        }
+
+        if ($this->response) {
+            $context['response'] = $this->responseContext();
+        }
+
+        return $context;
     }
 
     protected function requestContext(): array
@@ -221,16 +247,70 @@ class RequestLogger
             }
 
             if (! Arr::has($rules, 'only')) {
-                Arr::set($data, "{$field}.{$key}", $field == 'headers' ? ['********'] : '********');
+                $this->maskValue($data, $field, $key, $rules);
 
                 continue;
             }
 
             foreach (data_get($rules, 'only', []) as $url) {
                 if (preg_match('/'.preg_quote($url, '/').'/', $this->requestUrl())) {
-                    Arr::set($data, "{$field}.{$key}", $field == 'headers' ? ['********'] : '********');
+                    $this->maskValue($data, $field, $key, $rules);
                 }
             }
         }
+    }
+
+    protected function maskValue(array &$data, string $field, string $key, array $rules): void
+    {
+        $value = Arr::get($data, "{$field}.{$key}");
+
+        if ($field == 'headers' && is_array($value)) {
+            $value = reset($value);
+        }
+
+        $masked = $this->mask($value, data_get($rules, 'mask'));
+
+        Arr::set($data, "{$field}.{$key}", $field == 'headers' ? [$masked] : $masked);
+    }
+
+    protected function mask($value, $format = null): string
+    {
+        if (is_null($format) || (! is_string($value) && ! is_numeric($value))) {
+            return '********';
+        }
+
+        $value = (string) $value;
+
+        if ($format === 'email') {
+            return $this->maskEmail($value);
+        }
+
+        $show = min(4, (int) (data_get($format, 'show_last') ?? data_get($format, 'show_first') ?? 0));
+
+        if ($show < 1 || strlen($value) - $show < 4) {
+            return '********';
+        }
+
+        $stars = str_repeat('*', strlen($value) - $show);
+
+        return Arr::has((array) $format, 'show_last')
+            ? $stars.substr($value, -$show)
+            : substr($value, 0, $show).$stars;
+    }
+
+    protected function maskEmail(string $value): string
+    {
+        $pos = strpos($value, '@');
+
+        if ($pos === false) {
+            return '********';
+        }
+
+        $local = substr($value, 0, $pos);
+        $domain = substr($value, $pos);
+
+        $show = strlen($local) >= 5 ? 2 : 0;
+
+        return substr($local, 0, $show).str_repeat('*', max(strlen($local) - $show, 4)).$domain;
     }
 }

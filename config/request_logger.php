@@ -3,6 +3,7 @@
 return [
     'log' => [
         'channel' => 'request',
+        'context' => true,
     ],
 
     'masking' => [

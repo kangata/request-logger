@@ -3,6 +3,7 @@
 namespace QuetzalStudio\RequestLogger;
 
 use Illuminate\Support\ServiceProvider;
+use QuetzalStudio\RequestLogger\Http\Middleware\RequestLogger as RequestLoggerMiddleware;
 
 class RequestLoggerServiceProvider extends ServiceProvider
 {
@@ -12,6 +13,8 @@ class RequestLoggerServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/request_logger.php', 'request_logger');
+
+        $this->app->singleton(RequestLoggerMiddleware::class);
     }
 
     /**

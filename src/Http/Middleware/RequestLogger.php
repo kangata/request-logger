@@ -11,27 +11,32 @@ use Throwable;
 
 class RequestLogger
 {
+    protected ?string $channel = null;
+
     /**
      * Handle an incoming request.
      *
      * @param  \Closure(\Illuminate\Http\Request): (\Symfony\Component\HttpFoundation\Response)  $next
      */
-    public function handle(Request $request, Closure $next, string $channel = null): Response
+    public function handle(Request $request, Closure $next, ?string $channel = null): Response
     {
-        $response = $next($request);
+        $this->channel = $channel;
 
+        return $next($request);
+    }
+
+    public function terminate(Request $request, Response $response): void
+    {
         try {
             $logger = new Logger;
 
-            if ($channel) {
-                $logger->channel($channel);
+            if ($this->channel) {
+                $logger->channel($this->channel);
             }
 
             $logger->request($request)->response($response)->create();
         } catch (Throwable $e) {
             Log::error($e);
         }
-
-        return $response;
     }
 }
