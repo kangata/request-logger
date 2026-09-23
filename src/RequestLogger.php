@@ -236,28 +236,157 @@ class RequestLogger
         return $data;
     }
 
+    /**
+     * Rule keys are 'password', 'user.password', 'data.*.password' or
+     * '**.password' (any depth), the last of which may glob: '**.*_token'.
+     * Exact '**' names win over globs, globs match in config order.
+     */
     protected function masking(array $keys, array &$data, string $field): void
     {
+        $exact = [];
+        $globs = [];
+
         foreach ($keys as $key => $rules) {
-            $key = is_array($rules) ? $key : $rules;
+            $key = (string) (is_array($rules) ? $key : $rules);
             $rules = is_array($rules) ? $rules : [];
 
-            if (! Arr::has($data, "{$field}.{$key}")) {
-                continue;
-            }
-
-            if (! Arr::has($rules, 'only')) {
-                $this->maskValue($data, $field, $key, $rules);
+            if (strncmp($key, '**.', 3) !== 0) {
+                $this->maskPath($data, $field, $key, $rules);
 
                 continue;
             }
 
-            foreach (data_get($rules, 'only', []) as $url) {
-                if (preg_match('/'.preg_quote($url, '/').'/', $this->requestUrl())) {
-                    $this->maskValue($data, $field, $key, $rules);
-                }
+            if (Arr::has($rules, 'only') && ! $this->maskUrlMatches(data_get($rules, 'only', []))) {
+                continue;
+            }
+
+            $name = substr($key, 3);
+            $format = [data_get($rules, 'mask')];
+
+            if (strpbrk($name, '*?') === false) {
+                $exact[$name] = $format;
+            } else {
+                $globs[] = ['/^'.str_replace(['\*', '\?'], ['.*', '.'], preg_quote($name, '/')).'$/', $format];
             }
         }
+
+        if (($exact || $globs) && is_array(Arr::get($data, $field))) {
+            $cache = [];
+
+            $this->maskTree($data[$field], $exact, $globs, $field == 'headers', $cache);
+        }
+    }
+
+    protected function maskPath(array &$data, string $field, string $key, array $rules): void
+    {
+        if (Arr::has($rules, 'only') && ! $this->maskUrlMatches(data_get($rules, 'only', []))) {
+            return;
+        }
+
+        if (strpos($key, '*') === false) {
+            if (Arr::has($data, "{$field}.{$key}")) {
+                $this->maskValue($data, $field, $key, $rules);
+            }
+
+            return;
+        }
+
+        foreach ($this->expandPath($key, Arr::get($data, $field)) as $path) {
+            $this->maskValue($data, $field, $path, $rules);
+        }
+    }
+
+    protected function expandPath(string $pattern, $payload): array
+    {
+        if (! is_array($payload) || $pattern === '') {
+            return [];
+        }
+
+        $paths = [''];
+
+        foreach (explode('.', $pattern) as $segment) {
+            $next = [];
+
+            foreach ($paths as $prefix) {
+                $node = $prefix === '' ? $payload : Arr::get($payload, $prefix);
+
+                if (! is_array($node)) {
+                    continue;
+                }
+
+                foreach ($segment === '*' ? array_keys($node) : [$segment] as $k) {
+                    if (array_key_exists($k, $node)) {
+                        $next[] = $prefix === '' ? (string) $k : $prefix.'.'.$k;
+                    }
+                }
+            }
+
+            $paths = $next;
+        }
+
+        return $paths;
+    }
+
+    /**
+     * A matched key is replaced whole and not descended into.
+     */
+    protected function maskTree(array &$node, array $exact, array $globs, bool $isHeaders, array &$cache): void
+    {
+        foreach ($node as $k => &$value) {
+            // A list index is never a key name.
+            if (is_int($k)) {
+                if (is_array($value)) {
+                    $this->maskTree($value, $exact, $globs, $isHeaders, $cache);
+                }
+
+                continue;
+            }
+
+            $rule = isset($cache[$k]) ? $cache[$k] : ($cache[$k] = $this->resolveMaskRule($k, $exact, $globs));
+
+            if ($rule === false) {
+                if (is_array($value)) {
+                    $this->maskTree($value, $exact, $globs, $isHeaders, $cache);
+                }
+
+                continue;
+            }
+
+            $masked = $this->mask($isHeaders && is_array($value) ? reset($value) : $value, $rule[0]);
+
+            $value = $isHeaders ? [$masked] : $masked;
+        }
+
+        unset($value);
+    }
+
+    /**
+     * @return array|false
+     */
+    protected function resolveMaskRule(string $name, array $exact, array $globs)
+    {
+        if (array_key_exists($name, $exact)) {
+            return $exact[$name];
+        }
+
+        foreach ($globs as $glob) {
+            if (preg_match($glob[0], $name)) {
+                return $glob[1];
+            }
+        }
+
+        return false;
+    }
+
+    protected function maskUrlMatches(array $urls): bool
+    {
+        foreach ($urls as $url) {
+            if (preg_match('/'.preg_quote($url, '/').'/', $this->requestUrl())) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     protected function maskValue(array &$data, string $field, string $key, array $rules): void

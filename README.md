@@ -117,6 +117,38 @@ Keys listed in the `masking` config are replaced before logging. A plain key is 
 
 Keys support dot notation for nested values (e.g. `user.password`).
 
+### Matching keys at any depth
+
+A dot path has to name every level, which does not work for keys inside arrays — `data.0.token` only masks the first element. Prefix a key with `**.` to match that key name wherever it appears, lists included:
+
+```php
+'body' => [
+    '**.password',
+    '**.*_token',   // access_token, refresh_token, ...
+],
+```
+
+`**.` keys accept a glob (`*` for any run of characters, `?` for one) and take the same `mask` and `only` options as plain keys.
+
+An exact name wins over a glob, and globs match in the order you configure them:
+
+```php
+'body' => [
+    '**.card_holder' => ['mask' => ['show_first' => 2]],  // Jo******
+    '**.card*' => ['mask' => ['show_last' => 4]],         // ********3456
+],
+```
+
+A `*` also works as a segment inside a normal dot path, matching one level:
+
+```php
+'body' => [
+    'data.*.token',
+],
+```
+
+All `**.` keys are resolved in a single pass over the payload, so adding more of them does not measurably change the cost.
+
 ### Partial masking
 
 For PII fields you need to trace in the logs (which email/phone/account a request was about), use the `mask` option to keep part of the value visible:
